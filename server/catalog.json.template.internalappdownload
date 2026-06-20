@@ -1,0 +1,11 @@
+[
+	{
+		"id": "tempapp",
+		"Name": "Template App",
+		"Version": "0",
+		"Url": "/path_to_your_app",
+		"description": "Template",
+		"IconUrl": "",
+		"Status": "available"
+	}
+]

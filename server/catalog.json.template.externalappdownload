@@ -1,0 +1,11 @@
+[
+	{
+		"id": "tempapp",
+		"Name": "Template App",
+		"Version": "0",
+		"Url": "https://url.to.your.program",
+		"description": "Template",
+		"IconUrl": "",
+		"Status": "available"
+	}
+]
