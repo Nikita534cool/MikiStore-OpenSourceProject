@@ -27,9 +27,6 @@ using Path = System.IO.Path;
 
 namespace MikiStore
 {
-    /// <summary>
-    /// Interaction logic for MainWindow.xaml
-    /// </summary>
     
     public partial class MainWindow : Window
     {
@@ -49,12 +46,8 @@ namespace MikiStore
             InitializeComponent();
             InitializeMikiEnvironment();
 
-            // 2. Add the timer logic here, after InitializeComponent
             _autoRefreshTimer = new DispatcherTimer();
             _autoRefreshTimer.Interval = TimeSpan.FromSeconds(30);
-
-            // This makes sure it doesn't freeze the UI while checking for updates
-            // The 'async' here is the magic key that unlocks 'await'
             _autoRefreshTimer.Tick += async (s, e) =>
             {
                 await LoadAppsIntoUI();
@@ -64,9 +57,6 @@ namespace MikiStore
 
             _listRefreshTimer = new DispatcherTimer();
             _listRefreshTimer.Interval = TimeSpan.FromSeconds(60);
-
-            // This makes sure it doesn't freeze the UI while checking for updates
-            // The 'async' here is the magic key that unlocks 'await'
             _listRefreshTimer.Tick += async (s, e) =>
             {
                 await refreshList();
@@ -74,9 +64,7 @@ namespace MikiStore
 
             _listRefreshTimer.Start();
 
-            // Optional: Run it once immediately so you don't wait 30s for the first load
             _ = LoadAppsIntoUI();
-            // Made by me and fixed by Gemini.
         }
 
         private async Task refreshList()
@@ -93,7 +81,6 @@ namespace MikiStore
                                 MessageBoxButton.OK,
                                 MessageBoxImage.Warning);
 
-                // Shutdown or enter offline mode to save T440 bandwidth
                 Application.Current.Shutdown();
             }
             else
@@ -122,13 +109,10 @@ namespace MikiStore
             if (!Directory.Exists(mikiPath))
             {
                 Directory.CreateDirectory(mikiPath);
-                // We can even make it hidden!
                 File.SetAttributes(mikiPath, FileAttributes.Hidden);
             }
 
-            // Made by me and fixed by Gemini.
         }
-        // Paste this below the MainWindow() constructor
         private void InitializeMikiEnvironment()
         {
             if (versionString != "")
@@ -137,7 +121,6 @@ namespace MikiStore
             }
             try
             {
-                // Path: C:\Users\YourName\AppData\Local\.mikistoreopen
                 string appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
                 string mikiPath = Path.Combine(appData, appDataFolder);
 
@@ -149,11 +132,8 @@ namespace MikiStore
             }
             catch (Exception ex)
             {
-                // If something goes wrong, we'll know
                 MessageBox.Show("Miki Forge failed to start: " + ex.Message);
             }
-
-            // Made by me and fixed by Gemini.
         }
         private async Task LoadAppsIntoUI()
         {
@@ -168,7 +148,6 @@ namespace MikiStore
 
             try
             {
-                // 2. Download fresh JSON
                 json = await _client.GetStringAsync(serverUrl + "/catalog.json");
             }
             catch (Exception)
@@ -189,11 +168,9 @@ namespace MikiStore
                                 MessageBoxImage.Warning);
                 }
 
-                    // Shutdown or enter offline mode to save T440 bandwidth
                     Application.Current.Shutdown();
             }
 
-            // 3. Deserialize
             var apps = JsonSerializer.Deserialize<List<MikiApp>>(json, new JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true
@@ -204,23 +181,19 @@ namespace MikiStore
             foreach (var app in apps)
             {
                 app.isIconInstalling = true;
-                // PREPEND BASE URLS
                 if (!string.IsNullOrEmpty(app.IconUrl) && app.IconUrl.StartsWith("/"))
                     app.IconUrl = serverUrl + app.IconUrl;
 
                 if (!string.IsNullOrEmpty(app.Url) && app.Url.StartsWith("/"))
                     app.Url = serverUrl + app.Url;
 
-                // --- STATUS GUARD LOGIC ---
-                // If the app is pending, we ignore the local files and show the warning status
                 if (app.Status?.ToLower() == "pending")
                 {
                     app.ButtonText = "Pending";
-                    app.ButtonColor = "#888888"; // Gray for pending
+                    app.ButtonColor = "#888888";
                     continue;
                 }
 
-                // --- BUTTON STATE LOGIC ---
                 string installDir = Path.Combine(mikiDir, "apps", app.Id);
                 bool physicallyExists = Directory.Exists(installDir) &&
                                         Directory.GetFiles(installDir, "*.exe", SearchOption.AllDirectories).Any();
@@ -248,15 +221,13 @@ namespace MikiStore
                 }
             }
 
-            // 4. Force UI Refresh
             fullCatalog = apps.OrderBy(a => a.Name).ToList();
 
-            // Resetting to null forces WPF to redraw the entire list from the fresh JSON
             AppList.ItemsSource = null;
 
             if (isSearching)
             {
-                SearchBox_TextChanged(null, null); // This will re-fill the ItemsSource based on search
+                SearchBox_TextChanged(null, null);
             }
             else
             {
@@ -287,13 +258,11 @@ namespace MikiStore
                 return;
             }
 
-            // --- SETUP PATHS ---
             string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             string baseDir = System.IO.Path.Combine(localAppData, appDataFolder);
             string tempDir = System.IO.Path.Combine(baseDir, "temp");
             string installDir = System.IO.Path.Combine(baseDir, "apps", app.Id);
 
-            // LAUNCH LOGIC (Stays the same, uses local files)
             if (app.ButtonText == "Launch")
             {
                 string[] files = System.IO.Directory.GetFiles(installDir, "*.exe", System.IO.SearchOption.AllDirectories);
@@ -320,19 +289,14 @@ namespace MikiStore
                 isDownloading = true;
                 app.IsIntermediate = true;
                 app.ButtonText = "Pending...";
-
-                // --- 1. DYNAMIC URL RESOLUTION (The Auto-Glue) ---
+                
                 string finalDownloadUrl = app.Url;
                 if (app.Url.StartsWith("/"))
                 {
-                    // Fetch the latest beacon address to be 100% sure the tunnel is current
-                    string beaconUrl = "https://raw.githubusercontent.com/Mikigamer888/st0re/main/catalog-url.txt";
-                    string cloudflareUrl = (await _client.GetStringAsync(beaconUrl)).Trim().TrimEnd('/');
 
-                    finalDownloadUrl = cloudflareUrl + app.Url;
+                    finalDownloadUrl = serverUrl + app.Url;
                 }
 
-                // --- 2. PREPARE DOWNLOAD ---
                 bool isZip = finalDownloadUrl.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
                 string downloadPath = isZip
                     ? System.IO.Path.Combine(tempDir, $"{app.Id}.zip")
@@ -341,7 +305,6 @@ namespace MikiStore
                 System.IO.Directory.CreateDirectory(tempDir);
                 System.IO.Directory.CreateDirectory(installDir);
 
-                // Encode spaces just in case
                 string encodedUrl = finalDownloadUrl.Replace(" ", "%20");
 
                 var response = await _client.GetAsync(encodedUrl, System.Net.Http.HttpCompletionOption.ResponseHeadersRead);
@@ -370,7 +333,6 @@ namespace MikiStore
                     }
                 }
 
-                // ZIP EXTRACTION STEP
                 if (isZip)
                 {
                     app.IsIntermediate = true;
@@ -386,7 +348,6 @@ namespace MikiStore
                     System.IO.File.Delete(downloadPath);
                 }
 
-                // --- PATH B: CREATE START MENU SHORTCUT ---
                 try
                 {
                     string[] files = System.IO.Directory.GetFiles(installDir, "*.exe", System.IO.SearchOption.AllDirectories);
@@ -412,7 +373,7 @@ namespace MikiStore
                         System.Diagnostics.Process.Start(psi);
                     }
                 }
-                catch { /* Silent fail for shortcut */ }
+                catch {}
 
                 app.IsDownloading = false;
                 app.ButtonText = "Launch";
@@ -424,13 +385,11 @@ namespace MikiStore
             catch (Exception ex)
             {
                 app.IsDownloading = false;
-                isDownloading = false; // Important to reset the global flag on error!
+                isDownloading = false;
                 app.ButtonText = "Error";
                 MessageBox.Show($"Miki Forge Error: {ex.Message}");
             }
         }
-        // When you click the card (the Border)
-        // --- Add this function inside your MainWindow class ---
 
         private void Uninstall_Click(object sender, RoutedEventArgs e)
         {
@@ -447,21 +406,17 @@ namespace MikiStore
                     string appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
                     string installDir = System.IO.Path.Combine(appData, appDataFolder, "apps", app.Id);
 
-                    // 1. Physical file cleanup
                     if (System.IO.Directory.Exists(installDir))
                         System.IO.Directory.Delete(installDir, true);
 
-                    // 2. Start Menu Shortcut Cleanup
                     try
                     {
                         string startMenuFolder = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Apps from Miki Store");
                         string shortcutPath = System.IO.Path.Combine(startMenuFolder, app.Name + ".lnk");
 
-                        // Remove the specific shortcut
                         if (System.IO.File.Exists(shortcutPath))
                             System.IO.File.Delete(shortcutPath);
 
-                        // If the folder is now empty, delete the folder too to stay 100% clean
                         if (System.IO.Directory.Exists(startMenuFolder) &&
                             System.IO.Directory.GetFiles(startMenuFolder).Length == 0 &&
                             System.IO.Directory.GetDirectories(startMenuFolder).Length == 0)
@@ -469,9 +424,8 @@ namespace MikiStore
                             System.IO.Directory.Delete(startMenuFolder);
                         }
                     }
-                    catch { /* Silent fail for shortcut cleanup */ }
+                    catch {}
 
-                    // 3. UI and Version tracking update
                     app.ButtonText = "Install";
                     app.ButtonColor = "#007ACC";
 
@@ -486,8 +440,6 @@ namespace MikiStore
             }
         }
 
-        // --- IMPORTANT: Update your AppCard_Click to show/hide the button ---
-
         private void AppCard_Click(object sender, MouseButtonEventArgs e)
         {
             var border = sender as Border;
@@ -495,20 +447,17 @@ namespace MikiStore
 
             if (selectedApp != null)
             {
-                // 1. Add the Blur to the background
                 MainRoot.Effect = new System.Windows.Media.Effects.BlurEffect { Radius = 5 };
 
-                // 2. Set the data and show the panel
                 DetailsPanel.DataContext = selectedApp;
                 DetailsPanel.Visibility = Visibility.Visible;
             }
         }
 
-        // When you click "Back"
         private void Back_Click(object sender, RoutedEventArgs e)
         {
             DetailsPanel.Visibility = Visibility.Collapsed;
-            MainRoot.Effect = null; // Remove the blur
+            MainRoot.Effect = null;
         }
         private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
         {
@@ -522,7 +471,6 @@ namespace MikiStore
             else
             {
                 isSearching = true;
-                // Filter by Name or Description
                 var filtered = fullCatalog.Where(a =>
                     a.Name.ToLower().Contains(query) ||
                     a.Description.ToLower().Contains(query)
@@ -554,7 +502,6 @@ namespace MikiStore
         }
         private async Task ShowNotificationWithLocalIcon(MikiApp app)
         {
-            // 1. Check if the icon exists in the JSON
             bool hasIcon = !string.IsNullOrEmpty(app.IconUrl);
             string localPath = "";
 
@@ -569,17 +516,15 @@ namespace MikiStore
                     var bytes = await _client.GetByteArrayAsync(app.IconUrl);
                     await File.WriteAllBytesAsync(localPath, bytes);
                 }
-                catch { hasIcon = false; } // Fail gracefully if download fails
+                catch { hasIcon = false; }
             }
 
-            // 2. Build the toast
             var toast = new ToastContentBuilder()
                 .AddArgument("action", "launchApp")
-                .AddArgument("appId", app.Id) // We pass the ID so we know which one to open
+                .AddArgument("appId", app.Id)
                 .AddText($"{app.Name} is ready!")
                 .AddText("Your app was successfully installed! Click this notification to launch your freshly installed app.");
 
-            // 3. Only add the image if we actually have one
             if (hasIcon && File.Exists(localPath))
             {
                 toast.AddAppLogoOverride(new Uri(Path.GetFullPath(localPath)), ToastGenericAppLogoCrop.None);
@@ -587,7 +532,6 @@ namespace MikiStore
 
             toast.Show();
 
-            // 4. Cleanup
             if (hasIcon)
             {
                 await Task.Delay(5000);
@@ -597,7 +541,6 @@ namespace MikiStore
         private async Task ShowUpdateNotification(MikiApp app)
         {
             if (updateNotified.Contains(app.Id)) return;
-            // 1. Check if the icon exists in the JSON
             bool hasIcon = !string.IsNullOrEmpty(app.IconUrl);
             string localPath = "";
 
@@ -612,25 +555,20 @@ namespace MikiStore
                     var bytes = await _client.GetByteArrayAsync(app.IconUrl);
                     await File.WriteAllBytesAsync(localPath, bytes);
                 }
-                catch { hasIcon = false; } // Fail gracefully if download fails
+                catch { hasIcon = false; }
             }
 
-            // 2. Build the toast
             var toast = new ToastContentBuilder()
                 .AddText($"An update is avalaible for {app.Name}")
                 .AddText($"Launch Miki Store and update {app.Name}.");
 
-            // 3. Only add the image if we actually have one
             if (hasIcon && File.Exists(localPath))
             {
                 toast.AddAppLogoOverride(new Uri(Path.GetFullPath(localPath)), ToastGenericAppLogoCrop.None);
             }
 
-            // 4. Add the app to notified section
-
             toast.Show();
 
-            // 4. Cleanup
             if (hasIcon)
             {
                 await Task.Delay(5000);
@@ -644,25 +582,22 @@ namespace MikiStore
             var app = img?.DataContext as MikiApp;
             if (app == null) return;
 
-            // 1. If the image is already there (cached), kill the ring instantly
             if (img.Source != null && img.Source is BitmapSource bs && !bs.IsDownloading)
             {
                 app.isIconInstalling = false;
                 return;
             }
 
-            // 2. The "Handshake": We wait for the Source to change from 'Null' to 'Data'
-            // We use a small loop to 'poll' the status—this is more reliable than buggy events
             int attempts = 0;
-            while (attempts < 100) // Max 10 seconds (100 * 100ms)
+            while (attempts < 100)
             {
                 if (img.Source is BitmapSource bitmap && !bitmap.IsDownloading)
                 {
-                    app.isIconInstalling = false; // PIXELS ARRIVED!
+                    app.isIconInstalling = false;
                     break;
                 }
 
-                await Task.Delay(100); // Wait for the ThinkPad to deliver
+                await Task.Delay(100);
                 attempts++;
             }
         }
@@ -670,17 +605,15 @@ namespace MikiStore
 
     public class MikiApp : INotifyPropertyChanged
     {
-        // --- Identity & Data ---
-        public string Id { get; set; }        // <--- Restored
+        public string Id { get; set; }       
         public string Name { get; set; }
         public string Description { get; set; }
         public string Version { get; set; }
-        public string Url { get; set; }       // <--- Restored
-        public string IconUrl { get; set; } // Must have { get; set; }
+        public string Url { get; set; }       
+        public string IconUrl { get; set; }
         public string Status { get; set; }
         public string UploadedBy { get; set; }
 
-        // --- UI State ---
         private string _buttonText = "Install";
         public string ButtonText
         {
@@ -695,7 +628,6 @@ namespace MikiStore
             set { _buttonColor = value; OnPropertyChanged(nameof(ButtonColor)); }
         }
 
-        // --- Progress Logic ---
         private bool _isDownloading;
         public bool IsDownloading
         {
@@ -746,11 +678,8 @@ namespace MikiStore
             string input = value as string;
             if (string.IsNullOrEmpty(input)) return "";
 
-            // Step 1: Replace all variations of newlines with a single space
             string flatInput = input.Replace("\r", "").Replace("\n", " ");
 
-            // Step 2: Kill double spaces (logic for "\n" after "\n")
-            // This loops until "  " becomes " "
             while (flatInput.Contains("  "))
             {
                 flatInput = flatInput.Replace("  ", " ");
@@ -758,7 +687,6 @@ namespace MikiStore
 
             flatInput = flatInput.Trim();
 
-            // Step 3: Apply the 100-character Sovereign Limit
             if (flatInput.Length <= 100)
             {
                 return flatInput;
@@ -775,7 +703,6 @@ namespace MikiStore
     {
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            // If value is null, hide it. If it has data, show it.
             return value == null ? Visibility.Collapsed : Visibility.Visible;
         }
 
